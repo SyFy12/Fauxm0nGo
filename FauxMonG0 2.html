@@ -1,0 +1,278 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pokemon GO - Browser Edition</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            color: white;
+        }
+        h1 {
+            margin: 10px 0;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        #gameCanvas {
+            border: 4px solid white;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            background: #32a852;
+            cursor: crosshair;
+        }
+        #ui {
+            margin-top: 20px;
+            background: rgba(255,255,255,0.2);
+            padding: 15px 30px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            display: flex;
+            gap: 30px;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        #controls {
+            margin-top: 15px;
+            text-align: center;
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .stat {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎮 Pokemon GO - Browser Edition</h1>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="ui">
+        <div class="stat">⚪ Pokeballs: <span id="pokeballs">20</span></div>
+        <div class="stat">🎯 Caught: <span id="caught">0</span></div>
+        <div class="stat">🌍 Remaining: <span id="remaining">15</span></div>
+    </div>
+    <div id="controls">
+        Use WASD or Arrow Keys to move • Catch creatures by touching them • Visit PokeStops for more Pokeballs
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const WIDTH = 800;
+        const HEIGHT = 600;
+
+        // Creature types
+        const CREATURE_TYPES = [
+            { name: 'Fire', color: '#ff6400' },
+            { name: 'Water', color: '#0064ff' },
+            { name: 'Grass', color: '#00c832' },
+            { name: 'Electric', color: '#ffff00' },
+            { name: 'Normal', color: '#969696' }
+        ];
+
+        function randomType() {
+            return CREATURE_TYPES[Math.floor(Math.random() * CREATURE_TYPES.length)];
+        }
+
+        // Creature class
+        class Creature {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.type = randomType();
+                this.size = 20;
+                this.dx = (Math.random() - 0.5) * 4;
+                this.dy = (Math.random() - 0.5) * 4;
+            }
+
+            update() {
+                this.x += this.dx;
+                this.y += this.dy;
+
+                if (this.x <= this.size || this.x >= WIDTH - this.size) this.dx = -this.dx;
+                if (this.y <= this.size || this.y >= HEIGHT - this.size) this.dy = -this.dy;
+            }
+
+            draw() {
+                ctx.fillStyle = this.type.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                ctx.fillStyle = 'white';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(this.type.name, this.x, this.y - 25);
+            }
+        }
+
+        // PokeStop class
+        class PokeStop {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.size = 25;
+                this.active = true;
+                this.cooldown = 0;
+            }
+
+            update() {
+                if (this.cooldown > 0) {
+                    this.cooldown--;
+                    if (this.cooldown === 0) this.active = true;
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.active ? '#6496ff' : '#646464';
+                ctx.fillRect(this.x - this.size/2, this.y - this.size/2, this.size, this.size);
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(this.x - this.size/2, this.y - this.size/2, this.size, this.size);
+            }
+        }
+
+        // Player class
+        class Player {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.size = 15;
+                this.speed = 5;
+                this.pokeballs = 20;
+                this.caught = [];
+            }
+
+            move(dx, dy) {
+                this.x += dx * this.speed;
+                this.y += dy * this.speed;
+
+                this.x = Math.max(this.size, Math.min(WIDTH - this.size, this.x));
+                this.y = Math.max(this.size, Math.min(HEIGHT - this.size, this.y));
+            }
+
+            draw() {
+                ctx.fillStyle = '#ff0000';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+            }
+        }
+
+        // Game state
+        let player = new Player(400, 300);
+        let creatures = [];
+        let pokeStops = [];
+        let keys = {};
+
+        // Initialize world
+        function initWorld() {
+            for (let i = 0; i < 15; i++) {
+                let x = Math.random() * (WIDTH - 100) + 50;
+                let y = Math.random() * (HEIGHT - 100) + 50;
+                creatures.push(new Creature(x, y));
+            }
+
+            for (let i = 0; i < 8; i++) {
+                let x = Math.random() * (WIDTH - 100) + 50;
+                let y = Math.random() * (HEIGHT - 100) + 50;
+                pokeStops.push(new PokeStop(x, y));
+            }
+        }
+
+        // Collision detection
+        function distance(x1, y1, x2, y2) {
+            return Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2);
+        }
+
+        function checkCollisions() {
+            // Check creature collisions
+            for (let i = creatures.length - 1; i >= 0; i--) {
+                let creature = creatures[i];
+                if (distance(player.x, player.y, creature.x, creature.y) < player.size + creature.size) {
+                    if (player.pokeballs > 0) {
+                        player.pokeballs--;
+                        player.caught.push(creature.type.name);
+                        creatures.splice(i, 1);
+                        updateUI();
+                    }
+                }
+            }
+
+            // Check PokeStop collisions
+            for (let stop of pokeStops) {
+                if (distance(player.x, player.y, stop.x, stop.y) < player.size + stop.size && stop.active) {
+                    player.pokeballs += 5;
+                    stop.active = false;
+                    stop.cooldown = 200;
+                    updateUI();
+                }
+            }
+        }
+
+        // Update UI
+        function updateUI() {
+            document.getElementById('pokeballs').textContent = player.pokeballs;
+            document.getElementById('caught').textContent = player.caught.length;
+            document.getElementById('remaining').textContent = creatures.length;
+        }
+
+        // Handle input
+        function handleInput() {
+            let dx = 0, dy = 0;
+            if (keys['ArrowLeft'] || keys['a'] || keys['A']) dx = -1;
+            if (keys['ArrowRight'] || keys['d'] || keys['D']) dx = 1;
+            if (keys['ArrowUp'] || keys['w'] || keys['W']) dy = -1;
+            if (keys['ArrowDown'] || keys['s'] || keys['S']) dy = 1;
+            player.move(dx, dy);
+        }
+
+        // Game loop
+        function gameLoop() {
+            // Clear canvas
+            ctx.fillStyle = '#32a852';
+            ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+            // Update
+            handleInput();
+            for (let creature of creatures) creature.update();
+            for (let stop of pokeStops) stop.update();
+            checkCollisions();
+
+            // Draw
+            for (let stop of pokeStops) stop.draw();
+            for (let creature of creatures) creature.draw();
+            player.draw();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Event listeners
+        window.addEventListener('keydown', e => {
+            keys[e.key] = true;
+        });
+
+        window.addEventListener('keyup', e => {
+            keys[e.key] = false;
+        });
+
+        // Start game
+        initWorld();
+        updateUI();
+        gameLoop();
+    </script>
+</body>
+</html>
